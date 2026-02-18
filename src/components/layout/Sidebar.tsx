@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import {
   Plus,
@@ -16,6 +17,8 @@ import {
   Clock,
   CheckCircle2,
   Accessibility,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PlanningSession } from "@/types"
@@ -25,6 +28,27 @@ function formatDate(date: Date) {
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short" })
 }
 
+// ── Tooltip wrapper used throughout the mini sidebar ─────────────────────────
+function SideTooltip({
+  label,
+  children,
+  side = "right",
+}: {
+  label: string
+  children: React.ReactNode
+  side?: "right" | "left" | "top" | "bottom"
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// ── Full planning item (expanded mode) ───────────────────────────────────────
 function PlanningItem({
   session,
   isActive,
@@ -76,7 +100,42 @@ function PlanningItem({
   )
 }
 
-export default function Sidebar() {
+// ── Mini planning item (collapsed mode) ──────────────────────────────────────
+function MiniPlanningItem({
+  session,
+  isActive,
+  onSelect,
+}: {
+  session: PlanningSession
+  isActive: boolean
+  onSelect: () => void
+}) {
+  return (
+    <SideTooltip label={session.title}>
+      <button
+        onClick={onSelect}
+        className={cn(
+          "w-9 h-9 flex items-center justify-center rounded-lg transition-colors",
+          isActive ? "bg-white/20" : "hover:bg-white/10"
+        )}
+      >
+        {session.status === "completed" ? (
+          <CheckCircle2 className="w-4 h-4 text-gold" />
+        ) : (
+          <Clock className="w-4 h-4 text-white/50" />
+        )}
+      </button>
+    </SideTooltip>
+  )
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+interface SidebarProps {
+  collapsed: boolean
+  onToggle: () => void
+}
+
+export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navigate = useNavigate()
   const { planningId } = useParams()
   const { sessions, createSession, deleteSession, setActiveSession } = usePlanningStore()
@@ -108,6 +167,103 @@ export default function Sidebar() {
     .join("")
     .toUpperCase() ?? "?"
 
+  // ── Collapsed (mini) layout ─────────────────────────────────────────────
+  if (collapsed) {
+    return (
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-col h-full w-14 bg-brand-dark text-white select-none items-center py-3 gap-1">
+          {/* Logo + expand toggle */}
+          <SideTooltip label="Asistente Docente">
+            <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center cursor-default mb-1">
+              <BookOpen className="w-4 h-4 text-brand-dark" />
+            </div>
+          </SideTooltip>
+
+          <SideTooltip label="Expandir panel">
+            <button
+              onClick={onToggle}
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          </SideTooltip>
+
+          <div className="w-6 my-1">
+            <Separator className="bg-white/10" />
+          </div>
+
+          {/* New planning */}
+          <SideTooltip label="Nueva Planeación">
+            <button
+              onClick={handleNewPlanning}
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </SideTooltip>
+
+          {/* Session icons */}
+          {sessions.length > 0 && (
+            <>
+              <div className="w-6 my-1">
+                <Separator className="bg-white/10" />
+              </div>
+              <ScrollArea className="flex-1 w-full">
+                <div className="flex flex-col items-center gap-1 px-1.5">
+                  {sessions.map((session) => (
+                    <MiniPlanningItem
+                      key={session.id}
+                      session={session}
+                      isActive={session.id === planningId}
+                      onSelect={() => handleSelectSession(session)}
+                    />
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          <div className="w-6 mb-1">
+            <Separator className="bg-white/10" />
+          </div>
+
+          {/* Footer icons */}
+          <SideTooltip label="Accesibilidad">
+            <button className="w-9 h-9 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors">
+              <Accessibility className="w-4 h-4" />
+            </button>
+          </SideTooltip>
+
+          <SideTooltip label={user?.name ?? "Perfil"}>
+            <button
+              onClick={() => navigate("/profile")}
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+            >
+              <Avatar className="w-7 h-7">
+                <AvatarFallback className="bg-gold text-brand-dark text-xs font-bold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </SideTooltip>
+
+          <SideTooltip label="Cerrar sesión">
+            <button
+              onClick={logout}
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
+            >
+              <User className="w-4 h-4" />
+            </button>
+          </SideTooltip>
+        </div>
+      </TooltipProvider>
+    )
+  }
+
+  // ── Expanded layout ─────────────────────────────────────────────────────
   return (
     <>
       <div className="flex flex-col h-full bg-brand-dark text-white select-none">
@@ -117,9 +273,16 @@ export default function Sidebar() {
             <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center flex-shrink-0">
               <BookOpen className="w-4 h-4 text-brand-dark" />
             </div>
-            <span className="text-sm font-semibold text-white leading-tight">
+            <span className="text-sm font-semibold text-white leading-tight flex-1">
               Asistente Docente
             </span>
+            <button
+              onClick={onToggle}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+              title="Contraer panel lateral"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
           </div>
 
           <Button
@@ -161,13 +324,11 @@ export default function Sidebar() {
 
         {/* Footer */}
         <div className="p-3 space-y-1 flex-shrink-0">
-          {/* Accessibility (visual only per requirements) */}
           <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-white/50 hover:text-white/70 hover:bg-white/10 transition-colors text-sm">
             <Accessibility className="w-4 h-4" />
             <span>Accesibilidad</span>
           </button>
 
-          {/* Profile */}
           <button
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             onClick={() => navigate("/profile")}
@@ -203,7 +364,6 @@ export default function Sidebar() {
         onConfirm={handleConfirmDelete}
         variant="destructive"
       />
-
     </>
   )
 }
