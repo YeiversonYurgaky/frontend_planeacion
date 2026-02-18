@@ -1,0 +1,57 @@
+import type { User } from "@/types"
+
+export const MOCK_USER: User = {
+  id: "usr-001",
+  name: "Carlos Mendoza Rivera",
+  email: "c.mendoza@universidad.edu.co",
+  role: "docente",
+  programs: ["Ingeniería de Sistemas", "Matemáticas Aplicadas"],
+  avatarUrl: undefined,
+  courses: [
+    {
+      id: "c-001",
+      name: "Cálculo Diferencial",
+      code: "MAT-201",
+      program: "Ingeniería de Sistemas",
+      semester: "2024-II",
+      studentCount: 28,
+      isReligious: false,
+    },
+    {
+      id: "c-002",
+      name: "Álgebra Lineal",
+      code: "MAT-301",
+      program: "Matemáticas Aplicadas",
+      semester: "2024-II",
+      studentCount: 22,
+      isReligious: false,
+    },
+    {
+      id: "c-003",
+      name: "Estructura de Datos",
+      code: "SIS-401",
+      program: "Ingeniería de Sistemas",
+      semester: "2024-II",
+      studentCount: 35,
+      isReligious: false,
+    },
+    {
+      id: "c-004",
+      name: "Cátedra Cristiana I",
+      code: "REL-101",
+      program: "Ingeniería de Sistemas",
+      semester: "2024-II",
+      studentCount: 40,
+      isReligious: true,
+    },
+    {
+      id: "c-005",
+      name: "Ética y Valores",
+      code: "REL-201",
+      program: "Matemáticas Aplicadas",
+      semester: "2024-II",
+      studentCount: 30,
+      isReligious: true,
+    },
+  ],
+}

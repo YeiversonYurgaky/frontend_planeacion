@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* University brand: azul institucional #1e3a5f ≈ hsl(214, 52%, 25%) */
+    --background: 0 0% 100%;
+    --foreground: 214 52% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 214 52% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 52% 15%;
+
+    --primary: 214 52% 25%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 20% 94%;
+    --secondary-foreground: 214 52% 20%;
+
+    --muted: 214 15% 95%;
+    --muted-foreground: 214 20% 50%;
+
+    --accent: 38 90% 55%;
+    --accent-foreground: 214 52% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 214 52% 25%;
+
+    --radius: 0.5rem;
+
+    --sidebar-width: 260px;
+    --sources-width: 280px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    margin: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 2px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
