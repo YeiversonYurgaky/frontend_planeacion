@@ -1,18 +1,21 @@
+import { useState } from "react"
 import { Outlet } from "react-router-dom"
 import Sidebar from "./Sidebar"
 
 export default function Layout() {
+  const [collapsed, setCollapsed] = useState(false)
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Left sidebar */}
+      {/* Left sidebar — animates between full and mini width */}
       <aside
-        className="flex-shrink-0 border-r border-border"
-        style={{ width: "var(--sidebar-width)" }}
+        className="flex-shrink-0 border-r border-border overflow-hidden transition-[width] duration-300 ease-in-out"
+        style={{ width: collapsed ? "56px" : "var(--sidebar-width)" }}
       >
-        <Sidebar />
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </aside>
 
-      {/* Main content — fills remaining width; pages handle the sources panel internally */}
+      {/* Main content */}
       <main className="flex-1 overflow-hidden">
         <Outlet />
       </main>
