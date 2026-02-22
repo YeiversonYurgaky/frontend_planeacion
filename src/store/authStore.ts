@@ -1,7 +1,51 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-import type { User } from "@/types"
-import { MOCK_USER } from "@/data/mockUser"
+import type { User, Course } from "@/types"
+import { api, setAccessToken } from "@/lib/api"
+
+// Shapes that come from the backend (snake_case)
+interface ApiCourse {
+  id: string
+  name: string
+  code: string
+  program: string
+  semester: string
+  student_count: number
+  is_religious: boolean
+}
+
+interface ApiUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  courses: ApiCourse[]
+}
+
+function mapCourse(c: ApiCourse): Course {
+  return {
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    program: c.program,
+    semester: c.semester,
+    studentCount: c.student_count,
+    isReligious: c.is_religious,
+  }
+}
+
+function mapUser(u: ApiUser): User {
+  const courses = (u.courses ?? []).map(mapCourse)
+  const programs = [...new Set(courses.map((c) => c.program))]
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role === "administrador" ? "administrador" : "docente",
+    programs,
+    courses,
+  }
+}
 
 interface AuthState {
   user: User | null
@@ -16,14 +60,21 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
 
-      login: async (_email: string, _password: string) => {
-        // Mock: accept any credentials, return the mock user
-        // TODO: replace with real API call when backend is ready
-        await new Promise((resolve) => setTimeout(resolve, 800))
-        set({ user: MOCK_USER, isAuthenticated: true })
+      login: async (email: string, password: string) => {
+        // 1. Obtener el access token
+        const { data: tokenData } = await api.post<{ access_token: string }>(
+          "/api/auth/login",
+          { email, password }
+        )
+        setAccessToken(tokenData.access_token)
+
+        // 2. Obtener el perfil completo del usuario (incluye cursos)
+        const { data: userData } = await api.get<ApiUser>("/api/auth/me")
+        set({ user: mapUser(userData), isAuthenticated: true })
       },
 
       logout: () => {
+        setAccessToken(null)
         set({ user: null, isAuthenticated: false })
       },
     }),

@@ -2,8 +2,38 @@ import { useCallback } from "react"
 import { usePlanningStore } from "@/store/planningStore"
 import { useAuthStore } from "@/store/authStore"
 import { buildFlowSteps } from "@/data/flowSteps"
-import { generateMockResult } from "@/data/mockAiResponse"
-import type { FlowAnswers, FlowStepId, Message } from "@/types"
+import { api } from "@/lib/api"
+import type { FlowAnswers, FlowStepId, Message, PlanningResult } from "@/types"
+
+// Mapea las respuestas camelCase del frontend al snake_case que espera el backend
+function toApiAnswers(answers: Partial<FlowAnswers>, isReligious: boolean) {
+  return {
+    course_id: answers.courseId ?? "",
+    course_name: answers.courseName ?? "",
+    class_topic: answers.classTopic ?? "",
+    methodology: answers.methodology ?? "",
+    class_hours: answers.classHours ?? "",
+    faith_integration: answers.faithIntegration ?? "",
+    observations: answers.observations ?? "",
+    is_religious: isReligious,
+    faith_connection: answers.faithConnection ?? "",
+    missional_objectives: answers.missionalObjectives ?? "",
+    evaluation_type: answers.evaluationType ?? [],
+    faith_resources: answers.faithResources ?? [],
+    group_context: answers.groupContext ?? "",
+  }
+}
+
+// Mapea la respuesta snake_case del backend al tipo frontend PlanningResult
+function fromApiResult(data: Record<string, string | null>): PlanningResult {
+  return {
+    classPlanning: data.class_planning ?? "",
+    evaluationStrategies: data.evaluation_strategies ?? "",
+    rubric: data.rubric ?? "",
+    spiritualIntegration: data.spiritual_integration ?? undefined,
+    biblicalResources: data.biblical_resources ?? undefined,
+  }
+}
 
 function makeId() {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -30,7 +60,7 @@ function userMessage(content: string): Message {
 }
 
 export function useConversationFlow(sessionId: string) {
-  const { addMessage, updateFlowState, updateSessionTitle, completeSession } =
+  const { addMessage, updateFlowState, updateSessionTitle, completeSession, restartFlow } =
     usePlanningStore()
   const user = useAuthStore((s) => s.user)
 
@@ -66,29 +96,34 @@ export function useConversationFlow(sessionId: string) {
     [sessionId, addMessage, updateFlowState]
   )
 
-  // ── Generate (mock) — defined BEFORE handleInput so it can be in its deps ─
+  // ── Generate — llama al backend real con RAG + Gemini ─────────────────────
   const handleGenerate = useCallback(
     async (answers: Partial<FlowAnswers>, isReligious: boolean) => {
       updateFlowState(sessionId, { isGenerating: true, currentStepId: "generating" })
 
-      // Simulate AI latency
-      await new Promise((resolve) => setTimeout(resolve, 2500))
-
-      const result = generateMockResult({
-        courseName: answers.courseName ?? "Materia",
-        classTopic: answers.classTopic ?? "Tema",
-        methodology: answers.methodology ?? "Metodología activa",
-        classHours: answers.classHours ?? "2",
-        isReligious,
-      })
-
-      completeSession(sessionId, result)
-      addMessage(
-        sessionId,
-        assistantMessage(
-          "¡Tu planeación está lista! Aquí tienes los materiales generados. Puedes verlos y descargarlos desde las tarjetas de abajo."
+      try {
+        const { data } = await api.post<Record<string, string | null>>(
+          `/api/plannings/${sessionId}/generate`,
+          toApiAnswers(answers, isReligious)
         )
-      )
+        const result = fromApiResult(data)
+        completeSession(sessionId, result)
+        addMessage(
+          sessionId,
+          assistantMessage(
+            "¡Tu planeación está lista! Aquí tienes los materiales generados. Puedes verlos y descargarlos desde las tarjetas de abajo."
+          )
+        )
+      } catch (err) {
+        updateFlowState(sessionId, { isGenerating: false, currentStepId: "confirmation" })
+        addMessage(
+          sessionId,
+          assistantMessage(
+            "Ocurrió un error al generar la planeación. Por favor, inténtalo de nuevo."
+          )
+        )
+        console.error("Error generating planning:", err)
+      }
     },
     [sessionId, updateFlowState, completeSession, addMessage]
   )
@@ -177,5 +212,12 @@ export function useConversationFlow(sessionId: string) {
     [getSession, sessionId, addMessage, updateFlowState, updateSessionTitle, advanceTo, user, handleGenerate]
   )
 
-  return { startFlow, handleInput }
+  // ── Restart — vuelve al primer paso manteniendo el sessionId ─────────────
+  const handleRestart = useCallback(() => {
+    restartFlow(sessionId)
+    // startFlow se disparará automáticamente via el useEffect en ActiveChat
+    // porque messages.length pasará a 0
+  }, [sessionId, restartFlow])
+
+  return { startFlow, handleInput, handleRestart }
 }

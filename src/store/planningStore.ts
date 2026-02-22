@@ -1,13 +1,14 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { PlanningSession, Message, PdfSource, FlowState, PlanningResult } from "@/types"
+import { api } from "@/lib/api"
 
 interface PlanningState {
   sessions: PlanningSession[]
   activePlanningId: string | null
 
   // Session management
-  createSession: () => string
+  createSession: () => Promise<string>
   setActiveSession: (id: string | null) => void
   deleteSession: (id: string) => void
   getActiveSession: () => PlanningSession | undefined
@@ -21,6 +22,7 @@ interface PlanningState {
   // Session metadata
   updateSessionTitle: (sessionId: string, title: string) => void
   completeSession: (sessionId: string, result: PlanningResult) => void
+  restartFlow: (sessionId: string) => void
 
   // PDF Sources
   addSource: (sessionId: string, source: PdfSource) => void
@@ -40,16 +42,21 @@ export const usePlanningStore = create<PlanningState>()(
       sessions: [],
       activePlanningId: null,
 
-      createSession: () => {
-        const id = `plan-${Date.now()}`
+      createSession: async () => {
+        // Crear sesión en el backend para obtener el UUID real
+        const { data } = await api.post<{ id: string; title: string; created_at: string }>(
+          "/api/plannings/",
+          { title: "Nueva planeación" }
+        )
+        const id = String(data.id)
         const newSession: PlanningSession = {
           id,
-          title: "Nueva planeación",
+          title: data.title,
           courseId: "",
           courseName: "",
           status: "in_progress",
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: new Date(data.created_at),
+          updatedAt: new Date(data.created_at),
           messages: [],
           flowState: defaultFlowState(),
           sources: [],
@@ -118,6 +125,25 @@ export const usePlanningStore = create<PlanningState>()(
                   result,
                   updatedAt: new Date(),
                   flowState: { ...s.flowState, currentStepId: "done" as const, isGenerating: false },
+                }
+              : s
+          ),
+        })),
+
+      restartFlow: (sessionId) =>
+        set((state) => ({
+          sessions: state.sessions.map((s) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  title: "Nueva planeación",
+                  courseId: "",
+                  courseName: "",
+                  status: "in_progress" as const,
+                  messages: [],
+                  flowState: defaultFlowState(),
+                  result: undefined,
+                  updatedAt: new Date(),
                 }
               : s
           ),
