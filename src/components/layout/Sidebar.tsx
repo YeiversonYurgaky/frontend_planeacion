@@ -142,8 +142,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user, logout } = useAuthStore()
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
-  const handleNewPlanning = () => {
-    const id = createSession()
+  const handleNewPlanning = async () => {
+    const id = await createSession()
     navigate(`/chat/${id}`)
   }
 

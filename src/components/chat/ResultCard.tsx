@@ -18,8 +18,85 @@ import {
   Download,
   Eye,
   X,
+  Printer,
 } from "lucide-react"
 import type { PlanningResult } from "@/types"
+
+// ── Markdown → HTML (lightweight, only the constructs Gemini uses) ────────────
+function mdToHtml(md: string): string {
+  return md
+    // Tables: convert | col | col | rows to <table>
+    .replace(/(?:^\|.+\|\n?)+/gm, (table) => {
+      const rows = table.trim().split("\n")
+      let html = "<table>"
+      rows.forEach((row, i) => {
+        const cells = row.split("|").slice(1, -1)
+        if (i === 1 && cells.every((c) => /^[-: ]+$/.test(c))) return // separator row
+        const tag = i === 0 ? "th" : "td"
+        html += `<tr>${cells.map((c) => `<${tag}>${c.trim()}</${tag}>`).join("")}</tr>`
+      })
+      html += "</table>"
+      return html
+    })
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>[\s\S]*?<\/li>)/g, (m) => `<ul>${m}</ul>`)
+    .replace(/---/g, "<hr>")
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/^(?!<[hult]|<hr)(.+)$/gm, "<p>$1</p>")
+}
+
+function buildPrintHtml(
+  sections: { title: string; content: string }[],
+  title: string
+): string {
+  const body = sections
+    .map(
+      (s) => `
+      <section>
+        <h2 class="section-title">${s.title}</h2>
+        <div class="section-body">${mdToHtml(s.content)}</div>
+      </section>`
+    )
+    .join("")
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>${title}</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a1a; max-width: 820px; margin: 0 auto; padding: 32px 40px; }
+  h1 { font-size: 22px; color: #1e3a5f; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 24px; }
+  h2 { font-size: 16px; margin-top: 0; }
+  h3 { font-size: 14px; }
+  .section-title { font-size: 15px; font-weight: 700; color: #1e3a5f; border-left: 4px solid #1e3a5f; padding-left: 10px; margin-bottom: 10px; }
+  section { margin-bottom: 28px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; page-break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0; }
+  th, td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; }
+  th { background: #f3f4f6; font-weight: 600; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  p { margin: 6px 0; line-height: 1.6; }
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
+  .meta { font-size: 11px; color: #6b7280; margin-bottom: 24px; }
+  @media print {
+    body { padding: 16px; }
+    section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <p class="meta">Generado por el Asistente de Planeación Docente · ${new Date().toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })}</p>
+  ${body}
+</body>
+</html>`
+}
 
 const SECTIONS: {
   key: keyof PlanningResult
@@ -167,6 +244,20 @@ export default function ResultCard({ result, isReligious }: ResultCardProps) {
     downloadText(all, "planeacion-completa.txt")
   }
 
+  const exportPdf = () => {
+    const printSections = sections.map((s) => ({
+      title: s.title,
+      content: result[s.key] as string,
+    }))
+    const html = buildPrintHtml(printSections, "Planeación Docente")
+    const win = window.open("", "_blank")
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    // Esperar a que el contenido cargue antes de imprimir
+    win.onload = () => win.print()
+  }
+
   return (
     <div className="mx-4 space-y-2">
       <div className="flex items-center justify-between mb-1">
@@ -176,10 +267,16 @@ export default function ResultCard({ result, isReligious }: ResultCardProps) {
             {sections.length} secciones
           </Badge>
         </div>
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadAll}>
-          <Download className="w-3.5 h-3.5 mr-1.5" />
-          Descargar todo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportPdf}>
+            <Printer className="w-3.5 h-3.5 mr-1.5" />
+            Exportar PDF
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadAll}>
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            Descargar .txt
+          </Button>
+        </div>
       </div>
 
       {sections.map((s) => (

@@ -43,7 +43,7 @@ function WelcomeScreen({ onNew }: { onNew: () => void }) {
 // ── Chat area for an active session ──────────────────────────────────────────
 function ActiveChat({ session }: { session: PlanningSession }) {
   const user = useAuthStore((s) => s.user)
-  const { handleInput, startFlow } = useConversationFlow(session.id)
+  const { handleInput, startFlow, handleRestart } = useConversationFlow(session.id)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [multiSelected, setMultiSelected] = useState<string[]>([])
 
@@ -161,9 +161,7 @@ function ActiveChat({ session }: { session: PlanningSession }) {
                     answers={flowState.answers}
                     isReligious={isReligious}
                     onConfirm={() => void handleInput("confirm")}
-                    onEdit={() => {
-                      // TODO: implement restart flow
-                    }}
+                    onEdit={handleRestart}
                   />
                 </div>
               )}
@@ -234,8 +232,8 @@ export default function ChatPage() {
     }
   }, [planningId, session, setActiveSession])
 
-  const handleNewPlanning = () => {
-    const id = createSession()
+  const handleNewPlanning = async () => {
+    const id = await createSession()
     navigate(`/chat/${id}`)
   }
 
