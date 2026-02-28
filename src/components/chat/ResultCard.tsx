@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { api } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -228,9 +229,12 @@ function ResultCardSection({
 interface ResultCardProps {
   result: PlanningResult
   isReligious: boolean
+  sessionId: string
 }
 
-export default function ResultCard({ result, isReligious }: ResultCardProps) {
+export default function ResultCard({ result, isReligious, sessionId }: ResultCardProps) {
+  const [isExporting, setIsExporting] = useState(false)
+
   const sections = SECTIONS.filter((s) => {
     if (s.key === "biblicalResources") return isReligious && !!result[s.key]
     if (s.key === "spiritualIntegration") return !!result[s.key]
@@ -244,7 +248,7 @@ export default function ResultCard({ result, isReligious }: ResultCardProps) {
     downloadText(all, "planeacion-completa.txt")
   }
 
-  const exportPdf = () => {
+  const exportPdfFallback = () => {
     const printSections = sections.map((s) => ({
       title: s.title,
       content: result[s.key] as string,
@@ -258,6 +262,34 @@ export default function ResultCard({ result, isReligious }: ResultCardProps) {
     win.onload = () => win.print()
   }
 
+  const handleExportPdf = async () => {
+    setIsExporting(true)
+    try {
+      const body = {
+        class_planning: result.classPlanning,
+        evaluation_strategies: result.evaluationStrategies,
+        rubric: result.rubric,
+        spiritual_integration: result.spiritualIntegration ?? null,
+        biblical_resources: result.biblicalResources ?? null,
+      }
+      const response = await api.post(
+        `/api/plannings/${sessionId}/export/pdf`,
+        body,
+        { responseType: "blob" }
+      )
+      const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "planeacion.pdf"
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      exportPdfFallback()
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="mx-4 space-y-2">
       <div className="flex items-center justify-between mb-1">
@@ -268,9 +300,9 @@ export default function ResultCard({ result, isReligious }: ResultCardProps) {
           </Badge>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportPdf}>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => void handleExportPdf()} disabled={isExporting}>
             <Printer className="w-3.5 h-3.5 mr-1.5" />
-            Exportar PDF
+            {isExporting ? "Generando..." : "Exportar PDF"}
           </Button>
           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadAll}>
             <Download className="w-3.5 h-3.5 mr-1.5" />

@@ -5,8 +5,9 @@ import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import SourceItem from "./SourceItem"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
-import { Upload, FileText, Info } from "lucide-react"
+import { Upload, FileText, Loader2 } from "lucide-react"
 import type { PdfSource } from "@/types"
+import { uploadFilesToRag } from "@/lib/api"
 
 interface SourcesPanelProps {
   sessionId: string
@@ -18,24 +19,38 @@ export default function SourcesPanel({ sessionId }: SourcesPanelProps) {
   const removeSource = usePlanningStore((s) => s.removeSource)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const session = sessions.find((s) => s.id === sessionId)
   const sources = session?.sources ?? []
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    files.forEach((file) => {
-      if (file.type !== "application/pdf") return
-      const newSource: PdfSource = {
-        id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: file.name,
-        size: file.size,
-        uploadedAt: new Date(),
-      }
-      addSource(sessionId, newSource)
-    })
-    // Reset input so the same file can be uploaded again if needed
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter(
+      (f) => f.type === "application/pdf"
+    )
     e.target.value = ""
+    if (files.length === 0) return
+
+    setUploading(true)
+    setUploadError(null)
+
+    try {
+      await uploadFilesToRag(files)
+      files.forEach((file) => {
+        const newSource: PdfSource = {
+          id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          size: file.size,
+          uploadedAt: new Date(),
+        }
+        addSource(sessionId, newSource)
+      })
+    } catch {
+      setUploadError("Error al subir los archivos. Intenta de nuevo.")
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleRemoveConfirm = () => {
@@ -110,16 +125,23 @@ export default function SourcesPanel({ sessionId }: SourcesPanelProps) {
             variant="outline"
             className="w-full h-9 text-sm border-dashed"
             onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
           >
-            <Upload className="w-4 h-4 mr-2" />
-            Agregar fuente
+            {uploading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Subiendo...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 mr-2" />
+                Agregar fuente
+              </>
+            )}
           </Button>
-          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <Info className="w-3 h-3 flex-shrink-0 mt-0.5" />
-            <span>
-              Solo PDF. El procesamiento automático estará disponible próximamente.
-            </span>
-          </div>
+          {uploadError && (
+            <p className="text-xs text-destructive">{uploadError}</p>
+          )}
         </div>
       </div>
 

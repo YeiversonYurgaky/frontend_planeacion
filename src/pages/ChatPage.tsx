@@ -172,7 +172,7 @@ function ActiveChat({ session }: { session: PlanningSession }) {
               {/* Results */}
               {isDone && session.result && (
                 <div className="mt-4 pb-4">
-                  <ResultCard result={session.result} isReligious={isReligious} />
+                  <ResultCard result={session.result} isReligious={isReligious} sessionId={session.id} />
                 </div>
               )}
 
