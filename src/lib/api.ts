@@ -41,6 +41,14 @@ function processQueue(error: unknown, token: string | null = null) {
   failedQueue = []
 }
 
+// ── RAG upload ────────────────────────────────────────────────────────────────
+export async function uploadFilesToRag(files: File[]): Promise<void> {
+  const formData = new FormData()
+  files.forEach((file) => formData.append("files", file))
+  formData.append("metadata_json", JSON.stringify({ tipo_fuente: "material_docente" }))
+  await api.post("/api/rag/upload", formData)
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
