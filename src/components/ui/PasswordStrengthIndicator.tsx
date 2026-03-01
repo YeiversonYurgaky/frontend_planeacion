@@ -15,7 +15,7 @@ const CRITERIA: Criterion[] = [
 
 type Strength = "empty" | "weak" | "fair" | "strong" | "very-strong"
 
-function getStrength(passed: number, total: number): Strength {
+function getStrength(passed: number): Strength {
   if (passed === 0) return "empty"
   if (passed <= 2) return "weak"
   if (passed === 3) return "fair"
@@ -38,7 +38,7 @@ interface Props {
 export default function PasswordStrengthIndicator({ password }: Props) {
   const results = useMemo(() => CRITERIA.map((c) => c.test(password)), [password])
   const passedCount = results.filter(Boolean).length
-  const strength = getStrength(passedCount, CRITERIA.length)
+  const strength = getStrength(passedCount)
   const meta = STRENGTH_META[strength]
 
   if (!password) return null

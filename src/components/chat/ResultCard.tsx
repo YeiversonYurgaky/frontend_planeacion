@@ -24,8 +24,18 @@ import {
 import type { PlanningResult } from "@/types"
 
 // ── Markdown → HTML (lightweight, only the constructs Gemini uses) ────────────
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+}
+
 function mdToHtml(md: string): string {
-  return md
+  // Escape raw HTML first to prevent XSS, then convert markdown constructs
+  return escapeHtml(md)
     // Tables: convert | col | col | rows to <table>
     .replace(/(?:^\|.+\|\n?)+/gm, (table) => {
       const rows = table.trim().split("\n")
@@ -284,7 +294,11 @@ export default function ResultCard({ result, isReligious, sessionId }: ResultCar
       a.click()
       URL.revokeObjectURL(url)
     } catch {
-      exportPdfFallback()
+      // Fallback: abrir vista de impresión con aviso explícito al usuario
+      const confirmed = window.confirm(
+        "No se pudo generar el PDF desde el servidor. ¿Deseas abrir la vista de impresión del navegador como alternativa?"
+      )
+      if (confirmed) exportPdfFallback()
     } finally {
       setIsExporting(false)
     }

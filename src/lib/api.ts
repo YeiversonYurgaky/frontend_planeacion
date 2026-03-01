@@ -5,6 +5,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
 export const api = axios.create({
   baseURL: BASE_URL,
   withCredentials: true, // Necesario para enviar/recibir la cookie HttpOnly del refresh token
+  timeout: 90_000,       // 90s — acomoda la generación de planeaciones largas
 })
 
 // ── Token en memoria (no en localStorage para mayor seguridad) ────────────────
@@ -50,6 +51,11 @@ export async function uploadFilesToRag(files: File[]): Promise<void> {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Timeout del cliente: axios cancela la request después de 90s
+    if (error.code === "ECONNABORTED" || error.code === "ERR_CANCELED") {
+      return Promise.reject(new Error("La solicitud tardó demasiado. Verifica tu conexión e inténtalo de nuevo."))
+    }
+
     const originalRequest = error.config
     const isRefreshEndpoint = originalRequest?.url?.includes("/api/auth/refresh")
 

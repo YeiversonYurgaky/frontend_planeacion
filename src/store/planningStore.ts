@@ -173,6 +173,15 @@ export const usePlanningStore = create<PlanningState>()(
     }),
     {
       name: "planning-storage",
+      version: 1,
+      // Si el schema cambia en el futuro, incrementar version y añadir migrate()
+      migrate: (persisted, version) => {
+        if (version === 0) {
+          // Migración de v0 → v1: reiniciar estado si la estructura es incompatible
+          return { sessions: [], activePlanningId: null }
+        }
+        return persisted as PlanningState
+      },
     }
   )
 )
