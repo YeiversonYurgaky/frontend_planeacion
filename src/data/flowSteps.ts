@@ -95,10 +95,10 @@ export const BASE_STEPS: FlowStep[] = [
     placeholder: "Ej: el grupo tiene dificultades con álgebra básica, es una clase evaluativa...",
   },
   {
-    id: "confirmation",
+    id: "open-chat",
     message:
-      "Perfecto. Aquí tienes un resumen de lo que me has indicado. ¿Todo está correcto?",
-    inputType: "confirmation",
+      "Aquí está el resumen de lo que me indicaste. ¿Hay algo más que quieras añadir o precisar antes de generar tu planeación? Escríbelo aquí o presiona «Generar» cuando estés listo.",
+    inputType: "open-chat",
   },
 ]
 

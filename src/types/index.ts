@@ -89,7 +89,7 @@ export type FlowStepId =
   // Back to base flow
   | "faith-integration"
   | "observations"
-  | "confirmation"
+  | "open-chat"
   | "generating"
   | "done"
 
@@ -98,7 +98,7 @@ export type InputType =
   | "free-text"
   | "quick-chips"
   | "multi-chips"
-  | "confirmation"
+  | "open-chat"
   | "none"
 
 export interface FlowStep {

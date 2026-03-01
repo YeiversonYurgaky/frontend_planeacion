@@ -5,6 +5,21 @@ import { buildFlowSteps } from "@/data/flowSteps"
 import { api } from "@/lib/api"
 import type { FlowAnswers, FlowStepId, Message, PlanningResult } from "@/types"
 
+// Construye la instrucción de sistema para el chat libre pre-generación
+function buildSystemInstruction(answers: Partial<FlowAnswers>, isReligious: boolean): string {
+  return [
+    "Eres un asistente de planeación docente. El profesor está diseñando una clase con estas características:",
+    `- Materia: ${answers.courseName ?? ""}`,
+    `- Tema: ${answers.classTopic ?? ""}`,
+    `- Metodología: ${answers.methodology ?? ""}`,
+    `- Duración: ${answers.classHours ?? ""} hora(s)`,
+    `- Integración espiritual: ${answers.faithIntegration === "yes" || isReligious ? "Sí" : "No"}`,
+    answers.observations ? `- Observaciones: ${answers.observations}` : "",
+    "",
+    "Responde de forma concisa. Si el profesor agrega información, confírmala y ayúdalo. Si hace preguntas sobre su planeación, oriéntalo brevemente.",
+  ].filter(Boolean).join("\n")
+}
+
 // Mapea las respuestas camelCase del frontend al snake_case que espera el backend
 function toApiAnswers(answers: Partial<FlowAnswers>, isReligious: boolean) {
   return {
@@ -115,7 +130,7 @@ export function useConversationFlow(sessionId: string) {
           )
         )
       } catch (err) {
-        updateFlowState(sessionId, { isGenerating: false, currentStepId: "confirmation" })
+        updateFlowState(sessionId, { isGenerating: false, currentStepId: "open-chat" })
         addMessage(
           sessionId,
           assistantMessage(
@@ -196,8 +211,23 @@ export function useConversationFlow(sessionId: string) {
         case "group-context":
           newAnswers.groupContext = displayValue
           break
-        case "confirmation":
-          await handleGenerate(newAnswers, newIsReligious)
+        case "open-chat":
+          if (displayValue) {
+            const sysInstr = buildSystemInstruction(newAnswers, newIsReligious)
+            updateFlowState(sessionId, { isGenerating: true })
+            try {
+              const { data } = await api.post<{ id: string; role: string; content: string }>(
+                `/api/plannings/${sessionId}/messages`,
+                { role: "user", content: displayValue, system_instruction: sysInstr }
+              )
+              addMessage(sessionId, assistantMessage(data.content))
+            } catch (err) {
+              addMessage(sessionId, assistantMessage("Lo siento, ocurrió un error. Inténtalo de nuevo."))
+              console.error("Error sending open-chat message:", err)
+            } finally {
+              updateFlowState(sessionId, { isGenerating: false })
+            }
+          }
           return
       }
 
@@ -209,7 +239,7 @@ export function useConversationFlow(sessionId: string) {
         advanceTo(nextStep.id, newAnswers, newIsReligious)
       }
     },
-    [getSession, sessionId, addMessage, updateFlowState, updateSessionTitle, advanceTo, user, handleGenerate]
+    [getSession, sessionId, addMessage, updateFlowState, updateSessionTitle, advanceTo, user]
   )
 
   // ── Restart — vuelve al primer paso manteniendo el sessionId ─────────────
@@ -219,5 +249,38 @@ export function useConversationFlow(sessionId: string) {
     // porque messages.length pasará a 0
   }, [sessionId, restartFlow])
 
-  return { startFlow, handleInput, handleRestart }
+  // ── Dispara la generación leyendo el estado actual de la sesión ───────────
+  const triggerGenerate = useCallback(async () => {
+    const session = getSession()
+    if (!session) return
+    const { answers, isReligious } = session.flowState
+    await handleGenerate(answers, isReligious)
+  }, [getSession, handleGenerate])
+
+  // ── Chat libre post-generación ────────────────────────────────────────────
+  const sendChatMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return
+      addMessage(sessionId, userMessage(text))
+      updateFlowState(sessionId, { isGenerating: true })
+      try {
+        const { data } = await api.post<{ id: string; role: string; content: string }>(
+          `/api/plannings/${sessionId}/messages`,
+          { role: "user", content: text }
+        )
+        addMessage(sessionId, assistantMessage(data.content))
+      } catch (err) {
+        addMessage(
+          sessionId,
+          assistantMessage("Lo siento, ocurrió un error al procesar tu mensaje. Inténtalo de nuevo.")
+        )
+        console.error("Error sending chat message:", err)
+      } finally {
+        updateFlowState(sessionId, { isGenerating: false })
+      }
+    },
+    [sessionId, addMessage, updateFlowState]
+  )
+
+  return { startFlow, handleInput, handleRestart, sendChatMessage, triggerGenerate }
 }
