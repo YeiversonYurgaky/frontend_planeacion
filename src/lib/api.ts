@@ -26,20 +26,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// ── Response interceptor: renueva el token si recibe 401 ─────────────────────
-let isRefreshing = false
-let failedQueue: Array<{
-  resolve: (value: unknown) => void
-  reject: (reason?: unknown) => void
-}> = []
+// ── Callback de sesión expirada ───────────────────────────────────────────────
+// authStore lo registra para limpiar su estado cuando el refresh falla.
+let onSessionExpired: (() => void) | null = null
 
-function processQueue(error: unknown, token: string | null = null) {
-  failedQueue.forEach(({ resolve, reject }) => {
-    if (error) reject(error)
-    else resolve(token)
-  })
-  failedQueue = []
+export function registerOnSessionExpired(fn: () => void) {
+  onSessionExpired = fn
 }
+
+// ── Response interceptor: renueva el token si recibe 401 ─────────────────────
+// Un único Promise compartido entre todos los 401 concurrentes.
+// Evita que varias peticiones simultáneas disparen múltiples refreshes.
+let refreshPromise: Promise<string> | null = null
 
 // ── RAG upload ────────────────────────────────────────────────────────────────
 export async function uploadFilesToRag(files: File[]): Promise<void> {
@@ -53,37 +51,37 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const isRefreshEndpoint = originalRequest?.url?.includes("/api/auth/refresh")
 
-    // Si es 401 y aún no se ha reintentado, intentar renovar el token
+    // Si es 401 en el endpoint de refresh → sesión definitivamente expirada
+    if (error.response?.status === 401 && isRefreshEndpoint) {
+      setAccessToken(null)
+      onSessionExpired?.()
+      window.location.href = "/login"
+      return Promise.reject(error)
+    }
+
+    // Si es 401 en otro endpoint y aún no se ha reintentado → renovar token
     if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        // Encolar el request mientras se refresca
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject })
-        }).then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`
-          return api(originalRequest)
-        })
-      }
-
       originalRequest._retry = true
-      isRefreshing = true
 
-      try {
-        const { data } = await api.post<{ access_token: string }>("/api/auth/refresh")
-        setAccessToken(data.access_token)
-        processQueue(null, data.access_token)
-        originalRequest.headers.Authorization = `Bearer ${data.access_token}`
-        return api(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        setAccessToken(null)
-        // Redirigir al login si el refresh también falla
-        window.location.href = "/login"
-        return Promise.reject(refreshError)
-      } finally {
-        isRefreshing = false
+      // Si aún no hay un refresh en curso, iniciarlo
+      if (!refreshPromise) {
+        refreshPromise = api
+          .post<{ access_token: string }>("/api/auth/refresh")
+          .then(({ data }) => {
+            setAccessToken(data.access_token)
+            return data.access_token
+          })
+          .finally(() => {
+            refreshPromise = null
+          })
       }
+
+      // Todos los 401 concurrentes esperan la misma promesa
+      const token = await refreshPromise
+      originalRequest.headers.Authorization = `Bearer ${token}`
+      return api(originalRequest)
     }
 
     return Promise.reject(error)

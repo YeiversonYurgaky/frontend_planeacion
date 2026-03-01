@@ -5,6 +5,18 @@ import ChatPage from "@/pages/ChatPage"
 import ProfilePage from "@/pages/ProfilePage"
 import Layout from "@/components/layout/Layout"
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const isInitializing = useAuthStore((s) => s.isInitializing)
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-dark via-brand to-brand-light">
+        <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    )
+  }
+  return <>{children}</>
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -20,6 +32,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export default function AppRouter() {
   return (
     <BrowserRouter>
+      <AuthGate>
       <Routes>
         <Route path="/" element={<Navigate to="/chat" replace />} />
 
@@ -46,6 +59,7 @@ export default function AppRouter() {
 
         <Route path="*" element={<Navigate to="/chat" replace />} />
       </Routes>
+      </AuthGate>
     </BrowserRouter>
   )
 }

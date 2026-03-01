@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { User, Course } from "@/types"
-import { api, setAccessToken } from "@/lib/api"
+import { api, setAccessToken, registerOnSessionExpired } from "@/lib/api"
 
 // Shapes that come from the backend (snake_case)
 interface ApiCourse {
@@ -47,11 +47,22 @@ function mapUser(u: ApiUser): User {
   }
 }
 
+// Estado limpio reutilizable en logout / expiración
+const UNAUTHENTICATED = {
+  user: null,
+  isAuthenticated: false,
+  isInitializing: false,
+}
+
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
+  /** true mientras se verifica la sesión al arrancar (evita flash de /login) */
+  isInitializing: boolean
   login: (email: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
+  /** Verifica silenciosamente la sesión al arrancar la app */
+  initializeAuth: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -59,9 +70,10 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
+      isInitializing: true,
 
       login: async (email: string, password: string) => {
-        // 1. Obtener el access token
+        // 1. Obtener el access token (el refresh token llega como cookie HttpOnly)
         const { data: tokenData } = await api.post<{ access_token: string }>(
           "/api/auth/login",
           { email, password }
@@ -73,9 +85,32 @@ export const useAuthStore = create<AuthState>()(
         set({ user: mapUser(userData), isAuthenticated: true })
       },
 
-      logout: () => {
+      logout: async () => {
+        // Revocar el refresh token en el servidor (best-effort: no bloquea si falla)
+        try {
+          await api.post("/api/auth/logout")
+        } catch {
+          // Si el servidor no responde, igual cerramos la sesión localmente
+        }
         setAccessToken(null)
-        set({ user: null, isAuthenticated: false })
+        set(UNAUTHENTICATED)
+      },
+
+      initializeAuth: async () => {
+        set({ isInitializing: true })
+        try {
+          // Intenta obtener un nuevo access token usando la cookie de refresh
+          const { data } = await api.post<{ access_token: string }>("/api/auth/refresh")
+          setAccessToken(data.access_token)
+
+          // Recuperar el perfil del usuario
+          const { data: userData } = await api.get<ApiUser>("/api/auth/me")
+          set({ user: mapUser(userData), isAuthenticated: true, isInitializing: false })
+        } catch {
+          // Sin sesión válida → limpiar estado
+          setAccessToken(null)
+          set(UNAUTHENTICATED)
+        }
       },
     }),
     {
@@ -83,7 +118,14 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        // isInitializing nunca se persiste
       }),
     }
   )
 )
+
+// Registrar el callback que api.ts llama cuando el refresh falla definitivamente.
+// Limpia el estado de Zustand sin depender de importar authStore desde api.ts.
+registerOnSessionExpired(() => {
+  useAuthStore.setState(UNAUTHENTICATED)
+})

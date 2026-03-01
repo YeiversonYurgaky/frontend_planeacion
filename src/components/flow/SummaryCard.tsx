@@ -26,7 +26,7 @@ const FAITH_CONNECTION_LABELS: Record<string, string> = {
 interface SummaryCardProps {
   answers: Partial<FlowAnswers>
   isReligious: boolean
-  onConfirm: () => void
+  onConfirm?: () => void
   onEdit: () => void
 }
 
@@ -100,18 +100,20 @@ export default function SummaryCard({
           variant="outline"
           size="sm"
           onClick={onEdit}
-          className="flex-1"
+          className={onConfirm ? "flex-1" : "w-full"}
         >
           <Edit3 className="w-3.5 h-3.5 mr-1.5" />
-          Editar
+          Editar respuestas
         </Button>
-        <Button
-          size="sm"
-          onClick={onConfirm}
-          className="flex-1 bg-primary hover:bg-primary/90"
-        >
-          Generar planeación →
-        </Button>
+        {onConfirm && (
+          <Button
+            size="sm"
+            onClick={onConfirm}
+            className="flex-1 bg-primary hover:bg-primary/90"
+          >
+            Generar planeación →
+          </Button>
+        )}
       </div>
     </Card>
   )

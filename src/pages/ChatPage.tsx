@@ -43,7 +43,7 @@ function WelcomeScreen({ onNew }: { onNew: () => void }) {
 // ── Chat area for an active session ──────────────────────────────────────────
 function ActiveChat({ session }: { session: PlanningSession }) {
   const user = useAuthStore((s) => s.user)
-  const { handleInput, startFlow, handleRestart } = useConversationFlow(session.id)
+  const { handleInput, startFlow, handleRestart, sendChatMessage, triggerGenerate } = useConversationFlow(session.id)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [multiSelected, setMultiSelected] = useState<string[]>([])
 
@@ -107,6 +107,20 @@ function ActiveChat({ session }: { session: PlanningSession }) {
     void handleInput("")
   }, [handleInput])
 
+  const handleChatSend = useCallback(
+    (text: string) => {
+      void sendChatMessage(text)
+    },
+    [sendChatMessage]
+  )
+
+  const handleOpenChatSend = useCallback(
+    (text: string) => {
+      void handleInput(text)
+    },
+    [handleInput]
+  )
+
   const showChips =
     !isDone &&
     !isGenerating &&
@@ -121,7 +135,12 @@ function ActiveChat({ session }: { session: PlanningSession }) {
   const showSummary =
     !isDone &&
     !isGenerating &&
-    currentStep?.inputType === "confirmation"
+    currentStep?.inputType === "open-chat"
+
+  const showOpenChat =
+    !isDone &&
+    !isGenerating &&
+    currentStep?.inputType === "open-chat"
 
   const showInput =
     !isDone &&
@@ -129,6 +148,8 @@ function ActiveChat({ session }: { session: PlanningSession }) {
     currentStep &&
     (currentStep.inputType === "free-text" ||
       (currentStep.inputType === "quick-chips" && !!currentStep.placeholder))
+
+  const showChatInput = isDone
 
   return (
     <TooltipProvider>
@@ -154,13 +175,12 @@ function ActiveChat({ session }: { session: PlanningSession }) {
                 </div>
               )}
 
-              {/* Summary before confirmation */}
+              {/* Summary before open-chat step */}
               {showSummary && (
                 <div className="mt-2">
                   <SummaryCard
                     answers={flowState.answers}
                     isReligious={isReligious}
-                    onConfirm={() => void handleInput("confirm")}
                     onEdit={handleRestart}
                   />
                 </div>
@@ -202,6 +222,38 @@ function ActiveChat({ session }: { session: PlanningSession }) {
                 onSkip={currentStep.isOptional ? handleSkip : undefined}
                 placeholder={currentStep.placeholder}
                 isOptional={currentStep.isOptional}
+                disabled={isGenerating}
+              />
+            </div>
+          )}
+
+          {/* Chat libre pre-generación (paso open-chat) */}
+          {showOpenChat && (
+            <div className="border-t border-border bg-white">
+              <MessageInput
+                onSend={handleOpenChatSend}
+                placeholder="Añade contexto adicional o presiona «Generar»..."
+                disabled={isGenerating}
+              />
+              <div className="px-4 pb-3">
+                <Button
+                  onClick={() => void triggerGenerate()}
+                  className="w-full bg-primary hover:bg-primary/90"
+                  disabled={isGenerating}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generar Planeación
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Chat libre post-generación */}
+          {showChatInput && (
+            <div className="border-t border-border bg-white">
+              <MessageInput
+                onSend={handleChatSend}
+                placeholder="Pregunta algo sobre tu planeación..."
                 disabled={isGenerating}
               />
             </div>
