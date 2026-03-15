@@ -19,6 +19,7 @@ import {
   Accessibility,
   PanelLeftClose,
   PanelLeftOpen,
+  ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PlanningSession } from "@/types"
@@ -231,6 +232,17 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
 
           {/* Footer icons */}
+          {user?.role === "administrador" && (
+            <SideTooltip label="Panel de Administración">
+              <button
+                onClick={() => navigate("/admin")}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-gold/80 hover:text-gold hover:bg-white/10 transition-colors"
+              >
+                <ShieldCheck className="w-4 h-4" />
+              </button>
+            </SideTooltip>
+          )}
+
           <SideTooltip label="Accesibilidad">
             <button className="w-9 h-9 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors">
               <Accessibility className="w-4 h-4" />
@@ -324,6 +336,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* Footer */}
         <div className="p-3 space-y-1 flex-shrink-0">
+          {user?.role === "administrador" && (
+            <button
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gold/80 hover:text-gold hover:bg-white/10 transition-colors text-sm font-medium"
+              onClick={() => navigate("/admin")}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Panel Admin</span>
+            </button>
+          )}
+
           <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-white/50 hover:text-white/70 hover:bg-white/10 transition-colors text-sm">
             <Accessibility className="w-4 h-4" />
             <span>Accesibilidad</span>
