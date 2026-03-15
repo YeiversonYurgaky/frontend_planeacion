@@ -3,6 +3,7 @@ import { useAuthStore } from "@/store/authStore"
 import LoginPage from "@/pages/LoginPage"
 import ChatPage from "@/pages/ChatPage"
 import ProfilePage from "@/pages/ProfilePage"
+import AdminPage from "@/pages/AdminPage"
 import Layout from "@/components/layout/Layout"
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -26,6 +27,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (isAuthenticated) return <Navigate to="/chat" replace />
+  return <>{children}</>
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (user?.role !== "administrador") return <Navigate to="/chat" replace />
   return <>{children}</>
 }
 
@@ -55,6 +64,14 @@ export default function AppRouter() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/chat/:planningId" element={<ChatPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/chat" replace />} />
