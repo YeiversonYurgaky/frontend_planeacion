@@ -44,7 +44,12 @@ function getAxiosMessage(err: unknown, fallback: string): string {
   if (err && typeof err === "object" && "response" in err) {
     const data = (err as { response: { data: unknown } }).response.data
     if (data && typeof data === "object" && "detail" in data) {
-      return String((data as { detail: unknown }).detail)
+      const detail = (data as { detail: unknown }).detail
+      if (Array.isArray(detail)) {
+        // FastAPI 422 validation errors: [{loc, msg, type}, ...]
+        return detail.map((e) => (e as { msg?: string }).msg ?? String(e)).join(", ")
+      }
+      return String(detail)
     }
   }
   return fallback
