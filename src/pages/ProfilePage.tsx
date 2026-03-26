@@ -1,5 +1,9 @@
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuthStore } from "@/store/authStore"
+import type { Course } from "@/types"
+import { courseApi } from "@/lib/courseApi"
+import CourseFormDialog from "@/components/courses/CourseFormDialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -13,8 +17,11 @@ import {
   GraduationCap,
   BookOpen,
   Church,
-  Info,
   ShieldCheck,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react"
 
 function ProfileField({
@@ -42,6 +49,11 @@ function ProfileField({
 export default function ProfilePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const refreshUser = useAuthStore((s) => s.refreshUser)
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<Course | undefined>(undefined)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   if (!user) return null
 
@@ -52,6 +64,27 @@ export default function ProfilePage() {
     .join("")
     .toUpperCase()
 
+  const handleAdd = () => {
+    setEditingCourse(undefined)
+    setFormOpen(true)
+  }
+
+  const handleEdit = (course: Course) => {
+    setEditingCourse(course)
+    setFormOpen(true)
+  }
+
+  const handleDelete = async (course: Course) => {
+    if (!confirm(`¿Eliminar el curso "${course.name}"?`)) return
+    setDeletingId(course.id)
+    try {
+      await courseApi.delete(course.id)
+      await refreshUser()
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-muted/30">
       {/* Top bar */}
@@ -60,7 +93,6 @@ export default function ProfilePage() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <h1 className="text-base font-semibold text-foreground">Perfil de Usuario</h1>
-        <Badge variant="secondary" className="text-xs">Solo lectura</Badge>
       </div>
 
       {/* Two-panel body — fills all remaining height */}
@@ -110,16 +142,6 @@ export default function ProfilePage() {
               </div>
             </div>
           </ScrollArea>
-
-          {/* Nota solo lectura — fija abajo */}
-          <div className="flex-shrink-0 border-t border-border p-4">
-            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <p>
-                Datos provenientes del sistema SION. Para modificarlos, usa el portal institucional.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* ── Panel derecho: programas y materias ── */}
@@ -166,42 +188,74 @@ export default function ProfilePage() {
                   <Badge variant="secondary" className="ml-auto text-xs">
                     {user.courses.length}
                   </Badge>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleAdd}>
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Agregar
+                  </Button>
                 </div>
                 <Separator className="mb-1" />
-                <div className="divide-y divide-border">
-                  {user.courses.map((course) => (
-                    <div key={course.id} className="py-3 flex items-center gap-3">
-                      <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
-                        {course.isReligious ? (
-                          <Church className="w-4 h-4 text-gold" />
-                        ) : (
-                          <BookOpen className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium text-foreground">
-                            {course.name}
-                          </p>
-                          {course.isReligious && (
-                            <Badge
-                              variant="secondary"
-                              className="text-xs bg-gold/10 text-gold border-gold/20"
-                            >
-                              Religiosa
-                            </Badge>
+                {user.courses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-3">
+                    No tienes cursos asignados. Agrega uno para comenzar a planear clases.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {user.courses.map((course) => (
+                      <div key={course.id} className="py-3 flex items-center gap-3">
+                        <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
+                          {course.isReligious ? (
+                            <Church className="w-4 h-4 text-gold" />
+                          ) : (
+                            <BookOpen className="w-4 h-4 text-muted-foreground" />
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {course.code} · {course.program}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-foreground">
+                              {course.name}
+                            </p>
+                            {course.isReligious && (
+                              <Badge
+                                variant="secondary"
+                                className="text-xs bg-gold/10 text-gold border-gold/20"
+                              >
+                                Religiosa
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {course.code} · {course.program}
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          {course.studentCount} est.
+                        </span>
+                        {/* Edit / Delete */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            title="Editar curso"
+                            onClick={() => handleEdit(course)}
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            title="Eliminar curso"
+                            disabled={deletingId === course.id}
+                            onClick={() => handleDelete(course)}
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                          >
+                            {deletingId === course.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        {course.studentCount} est.
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Card>
 
             </div>
@@ -209,6 +263,13 @@ export default function ProfilePage() {
         </div>
 
       </div>
+
+      <CourseFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        initial={editingCourse}
+        onSaved={refreshUser}
+      />
     </div>
   )
 }

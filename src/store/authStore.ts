@@ -63,6 +63,8 @@ interface AuthState {
   logout: () => Promise<void>
   /** Verifica silenciosamente la sesión al arrancar la app */
   initializeAuth: () => Promise<void>
+  /** Re-fetches user profile from backend to sync course changes */
+  refreshUser: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -94,6 +96,11 @@ export const useAuthStore = create<AuthState>()(
         }
         setAccessToken(null)
         set(UNAUTHENTICATED)
+      },
+
+      refreshUser: async () => {
+        const { data: userData } = await api.get<ApiUser>("/api/auth/me")
+        set({ user: mapUser(userData) })
       },
 
       initializeAuth: async () => {

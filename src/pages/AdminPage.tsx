@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { adminApi, type AdminUser, type RagFileResult } from "@/lib/adminApi"
+import { courseApi, type ApiCourse } from "@/lib/courseApi"
+import CourseFormDialog from "@/components/courses/CourseFormDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,6 +29,10 @@ import {
   XCircle,
   Loader2,
   AlertCircle,
+  Church,
+  Pencil,
+  Plus,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -149,14 +155,168 @@ function CreateUserDialog({ open, onOpenChange, onCreated }: CreateUserDialogPro
   )
 }
 
+// ── Courses Tab ───────────────────────────────────────────────────────────────
+
+interface CoursesTabProps {
+  selectedUser: AdminUser | null
+  onClearUser: () => void
+}
+
+function CoursesTab({ selectedUser, onClearUser }: CoursesTabProps) {
+  const [courses, setCourses] = useState<ApiCourse[]>([])
+  const [loading, setLoading] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<ApiCourse | undefined>(undefined)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedUser) return
+    setLoading(true)
+    courseApi
+      .listForUser(selectedUser.id)
+      .then(({ data }) => setCourses(data))
+      .finally(() => setLoading(false))
+  }, [selectedUser])
+
+  const handleSaved = () => {
+    if (!selectedUser) return
+    courseApi.listForUser(selectedUser.id).then(({ data }) => setCourses(data))
+  }
+
+  const handleDelete = async (course: ApiCourse) => {
+    if (!confirm(`¿Eliminar el curso "${course.name}"?`)) return
+    setDeletingId(course.id)
+    try {
+      await courseApi.delete(course.id)
+      setCourses((prev) => prev.filter((c) => c.id !== course.id))
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  // Convert ApiCourse to the Course shape CourseFormDialog expects for editing
+  const toFormInitial = (c: ApiCourse) => ({
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    program: c.program,
+    semester: c.semester,
+    studentCount: c.student_count,
+    isReligious: c.is_religious,
+  })
+
+  if (!selectedUser) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center gap-3 text-muted-foreground">
+        <BookOpen className="w-10 h-10 opacity-30" />
+        <p className="text-sm">Selecciona un docente en la pestaña <strong>Usuarios</strong> para gestionar sus cursos.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">{selectedUser.name}</p>
+          <p className="text-xs text-muted-foreground">{selectedUser.email}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClearUser}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Cambiar docente
+          </button>
+          <Button size="sm" onClick={() => { setEditingCourse(undefined); setFormOpen(true) }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Agregar curso
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : courses.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4">Este docente no tiene cursos asignados.</p>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2.5 bg-muted/50 text-xs font-medium text-muted-foreground">
+            <span>Curso</span>
+            <span className="text-center">Código</span>
+            <span className="text-center">Est.</span>
+            <span className="text-center">Acciones</span>
+          </div>
+          <ScrollArea className="max-h-[420px]">
+            {courses.map((course, idx) => (
+              <div key={course.id}>
+                {idx > 0 && <Separator />}
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      {course.is_religious ? (
+                        <Church className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                      ) : (
+                        <BookOpen className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <p className="text-sm font-medium truncate">{course.name}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate ml-5">{course.program}</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground text-center">{course.code}</span>
+                  <span className="text-xs text-muted-foreground text-center">{course.student_count}</span>
+                  <div className="flex items-center gap-1 justify-center">
+                    <button
+                      title="Editar curso"
+                      onClick={() => { setEditingCourse(course); setFormOpen(true) }}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      title="Eliminar curso"
+                      disabled={deletingId === course.id}
+                      onClick={() => handleDelete(course)}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                    >
+                      {deletingId === course.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </ScrollArea>
+        </div>
+      )}
+
+      <CourseFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        initial={editingCourse ? toFormInitial(editingCourse) : undefined}
+        onSaved={handleSaved}
+        targetUserId={editingCourse ? undefined : selectedUser.id}
+      />
+    </div>
+  )
+}
+
 // ── Users Tab ─────────────────────────────────────────────────────────────────
 
-function UsersTab() {
+function UsersTab({ onManageCourses }: { onManageCourses: (user: AdminUser) => void }) {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [updating, setUpdating] = useState<string | null>(null)
+
+  // onManageCourses is passed from AdminPage
 
   useEffect(() => {
     adminApi
@@ -222,10 +382,11 @@ function UsersTab() {
 
       <div className="border rounded-lg overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2.5 bg-muted/50 text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-4 py-2.5 bg-muted/50 text-xs font-medium text-muted-foreground">
           <span>Usuario</span>
           <span className="text-center">Rol</span>
           <span className="text-center">Estado</span>
+          <span className="text-center">Cursos</span>
           <span className="text-center">Acciones</span>
         </div>
 
@@ -233,7 +394,7 @@ function UsersTab() {
           {users.map((user, idx) => (
             <div key={user.id}>
               {idx > 0 && <Separator />}
-              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3">
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 items-center px-4 py-3">
                 {/* Name + email */}
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{user.name}</p>
@@ -267,6 +428,17 @@ function UsersTab() {
                       Inactivo
                     </Badge>
                   )}
+                </div>
+
+                {/* Manage courses */}
+                <div className="flex justify-center">
+                  <button
+                    title="Gestionar cursos"
+                    onClick={() => onManageCourses(user)}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                  </button>
                 </div>
 
                 {/* Actions */}
@@ -554,17 +726,24 @@ function RagUploadTab() {
 
 // ── Tab nav ───────────────────────────────────────────────────────────────────
 
-type Tab = "users" | "rag"
+type Tab = "users" | "rag" | "courses"
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "users", label: "Usuarios", icon: Users },
-  { id: "rag",   label: "RAG Global", icon: Upload },
+  { id: "users",   label: "Usuarios",    icon: Users },
+  { id: "rag",     label: "RAG Global",  icon: Upload },
+  { id: "courses", label: "Cursos",      icon: BookOpen },
 ]
 
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>("users")
+  const [coursesUser, setCoursesUser] = useState<AdminUser | null>(null)
+
+  const handleManageCourses = (user: AdminUser) => {
+    setCoursesUser(user)
+    setActiveTab("courses")
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -606,8 +785,14 @@ export default function AdminPage() {
       {/* Tab content */}
       <ScrollArea className="flex-1">
         <div className="px-6 py-5">
-          {activeTab === "users" && <UsersTab />}
-          {activeTab === "rag"   && <RagUploadTab />}
+          {activeTab === "users"   && <UsersTab onManageCourses={handleManageCourses} />}
+          {activeTab === "rag"     && <RagUploadTab />}
+          {activeTab === "courses" && (
+            <CoursesTab
+              selectedUser={coursesUser}
+              onClearUser={() => setCoursesUser(null)}
+            />
+          )}
         </div>
       </ScrollArea>
     </div>
